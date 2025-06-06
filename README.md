@@ -2,7 +2,7 @@
 
 * Authors and contributors
 * Intorduction
-* Fault localization startup
+* Startup program
 
 # Authors and contributors
 
@@ -15,6 +15,6 @@ This is a Eye-Tracking project to detect cheating among students done in python 
 
 The project is completed during the preparation of Ilya A. Epishin work under Testing of software at Spbu Institute of Computer Science and Cybersecurity (SPbPU ICSC).
 
-# Fault localization startup
+# Startup program
 
 Start main.py file to start program. After completion, the results of the Eye-Tracking will be located in logs folder.

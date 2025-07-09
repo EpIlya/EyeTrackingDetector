@@ -11,12 +11,12 @@ def load_config(config_path: str = "config.json") -> Dict:
         "debug": True,
         "debug_window_size": [800, 600],
         "calibration_threshold": 0.10,
-        "max_suspicious_actions": 10,
+        "max_suspicious_actions": 1,
         "logs_dir": "logs",
         "gaze_log_file": "gaze_log.txt",
         "behavior_log_file": "behavior_log.json",
         "calibration_time": 10,
-        "analysis_window": 20,
+        "analysis_window": 5,
         "sleep_interval": 0.1
     }
 
@@ -168,31 +168,56 @@ class GazeTracker:
 
 
 class BehaviorAnalyzer:
-    def __init__(self, max_suspicious_actions: int = 10):
+    def __init__(self, max_suspicious_actions: int = 1):
         self.suspicious_actions = 0
         self.max_suspicious_actions = CONFIG[
             "max_suspicious_actions"] if max_suspicious_actions is None else max_suspicious_actions
-        self.gaze_history = []
-        self.analysis_window = CONFIG["analysis_window"]
+        self.gaze_history = []  
+        self.analysis_window = CONFIG["analysis_window"]  
+        self.window_size = int(self.analysis_window / CONFIG["sleep_interval"])  
+        self.min_consecutive_offcenter = int(2.0 / CONFIG["sleep_interval"]) 
+        self.offcenter_threshold = 0.7  
+        self.last_direction = "center"
+        self.consecutive_offcenter = 0
+        self.last_offcenter_time = None
 
     def analyze_gaze_pattern(self, gaze_data: str) -> None:
-        """Анализ паттернов взгляда на основе калибровки."""
-        self.gaze_history.append(gaze_data)
+        """Анализ паттернов взгляда с учетом длительности и процента вне центра."""
+        timestamp = time.time()
+        self.gaze_history.append((timestamp, gaze_data))
+        if len(self.gaze_history) > self.window_size:
+            self.gaze_history = self.gaze_history[-self.window_size:]
 
         if gaze_data not in ["center", "blink", "not calibrated"]:
+            self.consecutive_offcenter += 1
+        else:
+            self.consecutive_offcenter -= 1
+
+        self.last_direction = gaze_data
+
+        if self.consecutive_offcenter >= self.min_consecutive_offcenter:
             self.suspicious_actions += 1
-        elif self.suspicious_actions > 0:
+            self.consecutive_offcenter = 0  
+
+        offcenter_count = sum(1 for t, d in self.gaze_history if d not in ["center", "blink", "not calibrated"])
+        if len(self.gaze_history) >= self.window_size:
+            offcenter_ratio = offcenter_count / self.window_size
+            if offcenter_ratio > self.offcenter_threshold:
+                self.suspicious_actions += 1
+                self.gaze_history = self.gaze_history[-self.window_size//2:]
+
+        if gaze_data == "center" and self.suspicious_actions > 0:
             self.suspicious_actions -= 1
 
     def detect_cheating(self) -> bool:
-        """Проверка на списывание."""
+        """Проверка на списывание с учетом нового анализа."""
         return self.suspicious_actions >= self.max_suspicious_actions
 
     def generate_report(self) -> Dict[str, any]:
         """Генерация отчета."""
         report = {
             "suspicious_actions": self.suspicious_actions,
-            "gaze_history": self.gaze_history[-self.analysis_window:],
+            "gaze_history": [d for t, d in self.gaze_history],
             "current_status": "cheating" if self.detect_cheating() else "normal"
         }
         self.suspicious_actions = 0
